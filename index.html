@@ -1,50 +1,953 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>双人绳索协作原型</title>
-  <link rel="stylesheet" href="./style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双人绳索冒险</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a1a; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+#gameContainer { position: relative; }
+canvas { display: block; border-radius: 4px; }
+#ui-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; display: flex; flex-direction: column; align-items: center;
+}
+#hud {
+  display: flex; justify-content: space-between; width: 100%; padding: 12px 20px;
+  color: #fff; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+#hud .player-info { display: flex; align-items: center; gap: 8px; }
+#hud .label { opacity: 0.7; font-size: 12px; }
+#message-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: none; justify-content: center; align-items: center;
+  background: rgba(0,0,0,0.6); pointer-events: auto; flex-direction: column; gap: 16px;
+}
+#message-overlay.active { display: flex; }
+#message-overlay h1 { color: #fff; font-size: 42px; letter-spacing: 2px; }
+#message-overlay h1.win { color: #4ade80; }
+#message-overlay h1.lose { color: #f87171; }
+#message-overlay p { color: rgba(255,255,255,0.7); font-size: 16px; }
+#message-overlay button {
+  margin-top: 8px; padding: 10px 32px; font-size: 16px;
+  background: #6366f1; color: #fff; border: none; border-radius: 6px;
+  cursor: pointer; pointer-events: auto; transition: background 0.2s;
+}
+#message-overlay button:hover { background: #818cf8; }
+#start-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; justify-content: center; align-items: center;
+  background: rgba(0,0,0,0.75); pointer-events: auto; flex-direction: column; gap: 20px;
+}
+#start-overlay h1 { color: #fff; font-size: 48px; letter-spacing: 3px; }
+#start-overlay .controls-info {
+  display: flex; gap: 40px; color: rgba(255,255,255,0.8); font-size: 14px;
+}
+#start-overlay .control-group { text-align: center; }
+#start-overlay .control-group h3 { margin-bottom: 6px; font-size: 18px; }
+#start-overlay .keys { display: flex; gap: 6px; justify-content: center; }
+#start-overlay .key {
+  display: inline-block; padding: 6px 14px; background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; font-size: 16px; color: #fff;
+}
+#start-overlay button {
+  margin-top: 12px; padding: 14px 48px; font-size: 20px;
+  background: #6366f1; color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; transition: background 0.2s;
+}
+#start-overlay button:hover { background: #818cf8; }
+#progress-bar {
+  position: absolute; bottom: 10px; left: 20px; right: 20px; height: 6px;
+  background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;
+}
+#progress-bar .fill-a, #progress-bar .fill-b {
+  position: absolute; top: 0; left: 0; height: 100%; border-radius: 3px; transition: width 0.1s;
+}
+#progress-bar .fill-a { background: #60a5fa; opacity: 0.8; }
+#progress-bar .fill-b { background: #f472b6; opacity: 0.8; }
+</style>
 </head>
 <body>
-  <main class="app">
-    <section class="hud">
-      <div>
-        <h1>双人绳索协作</h1>
-        <p>角色 A：A / D，角色 B：← / →</p>
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="ui-overlay">
+    <div id="hud">
+      <div class="player-info">
+        <span style="color:#60a5fa">■</span>
+        <span class="label">玩家A [A/D]</span>
       </div>
-      <div class="hud-info">
-        <div id="phaseLabel">阶段 1 / 4</div>
-        <div id="statusLabel">进行中</div>
+      <div id="phase-display" style="color:rgba(255,255,255,0.6);font-size:12px;">阶段 1/4</div>
+      <div class="player-info">
+        <span class="label">玩家B [←/→]</span>
+        <span style="color:#f472b6">■</span>
       </div>
-    </section>
-
-    <section class="legend">
-      <span><i class="dot player-a"></i>角色 A</span>
-      <span><i class="dot player-b"></i>角色 B</span>
-      <span><i class="dot rope"></i>绳索范围</span>
-      <span><i class="dot drop"></i>掉落障碍</span>
-      <span><i class="dot spike"></i>钉刺</span>
-      <span><i class="dot lava"></i>岩浆</span>
-      <span><i class="dot platform"></i>浮动平台</span>
-    </section>
-
-    <section class="game-shell">
-      <canvas id="gameCanvas" width="1280" height="720"></canvas>
-      <div class="overlay hidden" id="overlay">
-        <h2 id="overlayTitle">游戏结束</h2>
-        <p id="overlayText"></p>
-        <button id="restartButton" type="button">重新开始</button>
+    </div>
+    <div id="progress-bar">
+      <div class="fill-a" style="width:0%"></div>
+      <div class="fill-b" style="width:0%"></div>
+    </div>
+  </div>
+  <div id="start-overlay">
+    <h1>双人绳索冒险</h1>
+    <div class="controls-info">
+      <div class="control-group">
+        <h3 style="color:#60a5fa">玩家 A</h3>
+        <div class="keys"><span class="key">A</span><span class="key">D</span></div>
       </div>
-    </section>
+      <div class="control-group">
+        <h3 style="color:#f472b6">玩家 B</h3>
+        <div class="keys"><span class="key">←</span><span class="key">→</span></div>
+      </div>
+    </div>
+    <p style="color:rgba(255,255,255,0.5)">两人被绳索连接，必须协作到达终点</p>
+    <button onclick="startGame()">开始游戏</button>
+  </div>
+  <div id="message-overlay">
+    <h1 id="msg-title"></h1>
+    <p id="msg-sub"></p>
+    <button onclick="restartGame()">再来一次</button>
+  </div>
+</div>
 
-    <section class="tips">
-      <h2>玩法目标</h2>
-      <p>两名角色都需要抵达终点；任意一人被砸中、踩到激活钉刺或掉进岩浆都会失败。</p>
-      <p>绳子会限制两人的最远距离，所以不能各走各的，必须协同移动与等待。</p>
-    </section>
-  </main>
+<script>
+// ========== Constants & Config ==========
+const W = 960, H = 540;
+const GROUND_Y = 420;
+const PLAYER_W = 24, PLAYER_H = 36;
+const MAX_ROPE = 200, MIN_DIST = 30;
+const PLAYER_SPEED = 3.2;
+const GRAVITY = 0.45;
+const LEVEL_LENGTH = 8400;
+const FINISH_X = LEVEL_LENGTH - 100;
+const CAMERA_SMOOTH = 0.08;
 
-  <script src="./game.js"></script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+
+// ========== Game State ==========
+let gameState = 'start'; // start, playing, win, lose
+let cameraX = 0;
+let players = [];
+let obstacles = { fallingObjects: [], spikes: [], lavaPits: [], movingPlatforms: [] };
+let particles = [];
+let warningMarkers = [];
+let frameCount = 0;
+
+// ========== Input System ==========
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; e.preventDefault(); });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; e.preventDefault(); });
+
+// ========== Player Class ==========
+class Player {
+  constructor(x, color, name) {
+    this.x = x; this.y = GROUND_Y;
+    this.vy = 0;
+    this.color = color; this.name = name;
+    this.isAlive = true;
+    this.isOnPlatform = false;
+    this.currentPlatform = null;
+    this.reachedEnd = false;
+    this.speed = 0;
+    this.deathReason = '';
+  }
+  get left() { return this.x - PLAYER_W/2; }
+  get right() { return this.x + PLAYER_W/2; }
+  get top() { return this.y - PLAYER_H; }
+  get bottom() { return this.y; }
+  die(reason) {
+    if (!this.isAlive) return;
+    this.isAlive = false;
+    this.deathReason = reason;
+    spawnDeathParticles(this.x, this.y - PLAYER_H/2, this.color);
+  }
+}
+
+// ========== Level Generation ==========
+function generateLevel() {
+  obstacles = { fallingObjects: [], spikes: [], lavaPits: [], movingPlatforms: [] };
+  warningMarkers = [];
+
+  // Randomly interleave all three obstacle types across the entire level
+  // Reserve zones for lava pits first (they need space), then fill gaps with rocks/spikes
+  const lavaPitPositions = [];
+  // Place 5-6 lava pits spread across the level
+  const pitCount = 5 + Math.floor(Math.random() * 2);
+  const pitSpacing = (FINISH_X - 600) / pitCount;
+  for (let i = 0; i < pitCount; i++) {
+    const baseX = 500 + i * pitSpacing + randomRange(50, pitSpacing * 0.4);
+    const w = randomRange(140, 220);
+    const spd = randomRange(0.8, 1.8);
+    createLavaPit(baseX, w, spd);
+    lavaPitPositions.push({ x: baseX, width: w });
+  }
+
+  // Helper: check if a position overlaps any lava pit (with margin)
+  function overlapsLava(px, margin) {
+    for (const lp of lavaPitPositions) {
+      if (px > lp.x - margin && px < lp.x + lp.width + margin) return true;
+    }
+    return false;
+  }
+
+  // Scatter falling objects and spikes randomly, avoiding lava zones
+  let x = 300;
+  while (x < FINISH_X - 200) {
+    const step = randomRange(120, 300);
+    x += step;
+    if (x >= FINISH_X - 200) break;
+    if (overlapsLava(x, 60)) continue; // skip if too close to lava
+
+    const roll = Math.random();
+    if (roll < 0.5) {
+      // Falling object
+      scheduleFallingObject(x, randomRange(60, 200));
+    } else {
+      // Spike
+      obstacles.spikes.push(new Spike(x, randomRange(20, 70)));
+    }
+  }
+}
+
+function scheduleFallingObject(targetX, delay) {
+  obstacles.fallingObjects.push(new FallingObject(targetX, delay));
+}
+
+function createLavaPit(startX, width, platformSpeed) {
+  obstacles.lavaPits.push({ x: startX, width: width });
+  obstacles.movingPlatforms.push(new MovingPlatform(
+    startX, startX + width, 60, platformSpeed
+  ));
+}
+
+function randomRange(min, max) { return min + Math.random() * (max - min); }
+
+// ========== Obstacle Classes ==========
+class FallingObject {
+  constructor(targetX, triggerOffset) {
+    this.targetX = targetX;
+    this.triggerOffset = triggerOffset; // how far camera must be to trigger
+    this.width = 28;
+    this.y = -40;
+    this.fallSpeed = 4.5;
+    this.state = 'waiting'; // waiting, warning, falling, landed, done
+    this.warningTimer = 0;
+    this.warningDuration = 70;
+    this.landTimer = 0;
+    this.triggered = false;
+  }
+  update() {
+    if (this.state === 'done') return;
+    // Trigger when camera is close enough
+    if (this.state === 'waiting') {
+      if (players.length < 2) return;
+      // Only trigger if no other rock is currently warning or falling
+      const otherActive = obstacles.fallingObjects.some(
+        f => f !== this && (f.state === 'warning' || f.state === 'falling')
+      );
+      if (otherActive) return;
+      const midPlayer = (players[0].x + players[1].x) / 2;
+      if (midPlayer > this.targetX - 500 - this.triggerOffset) {
+        this.state = 'warning';
+        this.warningTimer = 0;
+      }
+      return;
+    }
+    if (this.state === 'warning') {
+      this.warningTimer++;
+      if (this.warningTimer >= this.warningDuration) {
+        this.state = 'falling';
+        this.y = -40;
+      }
+      return;
+    }
+    if (this.state === 'falling') {
+      this.y += this.fallSpeed;
+      if (this.y >= GROUND_Y) {
+        this.y = GROUND_Y;
+        this.state = 'landed';
+        this.landTimer = 0;
+        spawnImpactParticles(this.targetX, GROUND_Y);
+      }
+      return;
+    }
+    if (this.state === 'landed') {
+      this.landTimer++;
+      if (this.landTimer > 40) this.state = 'done';
+    }
+  }
+}
+
+class Spike {
+  constructor(x, cycleOffset) {
+    this.x = x; this.width = 40;
+    this.state = 'idle'; // idle, warning, active, cooldown
+    this.timer = cycleOffset || 0;
+    this.idleDuration = 120;
+    this.warningDuration = 60;
+    this.activeDuration = 80;
+    this.cooldownDuration = 60;
+    this.height = 0;
+    this.maxHeight = 18;
+    this.triggered = false;
+  }
+  update() {
+    this.timer++;
+    if (this.state === 'idle') {
+      this.height = 0;
+      // Trigger when players are near
+      if (players.length < 2) return;
+      const midP = (players[0].x + players[1].x) / 2;
+      if (Math.abs(midP - this.x) < 400 || this.triggered) {
+        if (!this.triggered) { this.triggered = true; this.timer = 0; }
+        if (this.timer >= this.idleDuration) { this.state = 'warning'; this.timer = 0; }
+      }
+    } else if (this.state === 'warning') {
+      this.height = (this.timer % 8 < 4) ? 4 : 0;
+      if (this.timer >= this.warningDuration) { this.state = 'active'; this.timer = 0; }
+    } else if (this.state === 'active') {
+      this.height = this.maxHeight;
+      if (this.timer >= this.activeDuration) { this.state = 'cooldown'; this.timer = 0; }
+    } else if (this.state === 'cooldown') {
+      this.height = this.maxHeight * (1 - this.timer / this.cooldownDuration);
+      if (this.timer >= this.cooldownDuration) { this.state = 'idle'; this.timer = 0; }
+    }
+  }
+}
+
+class MovingPlatform {
+  constructor(rangeStart, rangeEnd, width, speed) {
+    this.rangeStart = rangeStart;
+    this.rangeEnd = rangeEnd;
+    this.width = width;
+    this.speed = speed;
+    this.x = rangeStart;
+    this.direction = 1;
+    this.y = GROUND_Y; // same level as ground
+    this.dwellTimer = 0;
+    this.dwellDuration = 120; // ~2 seconds at 60fps
+  }
+  get left() { return this.x; }
+  get right() { return this.x + this.width; }
+  update() {
+    // If dwelling at an edge, count down before moving again
+    if (this.dwellTimer > 0) {
+      this.dwellTimer--;
+      return;
+    }
+    this.x += this.speed * this.direction;
+    if (this.x + this.width >= this.rangeEnd) {
+      this.x = this.rangeEnd - this.width;
+      this.direction = -1;
+      this.dwellTimer = this.dwellDuration;
+    }
+    if (this.x <= this.rangeStart) {
+      this.x = this.rangeStart;
+      this.direction = 1;
+      this.dwellTimer = this.dwellDuration;
+    }
+  }
+}
+
+// ========== Particles ==========
+function spawnDeathParticles(x, y, color) {
+  for (let i = 0; i < 20; i++) {
+    particles.push({
+      x, y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6,
+      life: 40 + Math.random()*20, maxLife: 60, color, size: 2+Math.random()*3
+    });
+  }
+}
+function spawnImpactParticles(x, y) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x, y, vx: (Math.random()-0.5)*4, vy: -Math.random()*3,
+      life: 20+Math.random()*15, maxLife: 35, color: '#a0a0a0', size: 2+Math.random()*2
+    });
+  }
+}
+function updateParticles() {
+  for (let i = particles.length-1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// ========== Rope Constraint ==========
+function applyRopeConstraint() {
+  if (players.length < 2) return;
+  const a = players[0], b = players[1];
+  if (!a.isAlive || !b.isAlive) return;
+  const dist = b.x - a.x;
+  const absDist = Math.abs(dist);
+
+  // Max rope length
+  if (absDist > MAX_ROPE) {
+    const excess = absDist - MAX_ROPE;
+    const sign = dist > 0 ? 1 : -1;
+    a.x += sign * excess * 0.5;
+    b.x -= sign * excess * 0.5;
+  }
+  // Min distance
+  if (absDist < MIN_DIST) {
+    const deficit = MIN_DIST - absDist;
+    const sign = dist >= 0 ? 1 : -1;
+    a.x -= sign * deficit * 0.5;
+    b.x += sign * deficit * 0.5;
+  }
+}
+
+// ========== Collision Detection ==========
+function checkCollisions() {
+  for (const p of players) {
+    if (!p.isAlive) continue;
+
+    // Falling objects
+    for (const fo of obstacles.fallingObjects) {
+      if (fo.state === 'falling') {
+        if (Math.abs(p.x - fo.targetX) < (fo.width/2 + PLAYER_W/2) && p.y > fo.y - 10 && p.top < fo.y) {
+          p.die('被障碍物砸中');
+        }
+      }
+    }
+
+    // Spikes
+    for (const sp of obstacles.spikes) {
+      if (sp.state === 'active') {
+        if (p.x > sp.x - sp.width/2 - PLAYER_W/2 && p.x < sp.x + sp.width/2 + PLAYER_W/2 && p.y >= GROUND_Y - 2) {
+          p.die('踩到钉刺');
+        }
+      }
+    }
+
+    // Lava pits - only die if over lava AND less than 10% of body on a platform
+    for (const lp of obstacles.lavaPits) {
+      const playerLeft = p.x - PLAYER_W/2;
+      const playerRight = p.x + PLAYER_W/2;
+      // Check player is inside the lava pit area
+      if (playerRight > lp.x && playerLeft < lp.x + lp.width && p.y >= GROUND_Y) {
+        // Calculate how much of the player body is supported by any platform
+        let maxOverlapRatio = 0;
+        for (const mp of obstacles.movingPlatforms) {
+          const overlapLeft = Math.max(playerLeft, mp.left);
+          const overlapRight = Math.min(playerRight, mp.right);
+          if (overlapRight > overlapLeft) {
+            const ratio = (overlapRight - overlapLeft) / PLAYER_W;
+            if (ratio > maxOverlapRatio) maxOverlapRatio = ratio;
+          }
+        }
+        // Also count ground overlap (player partially outside the pit)
+        const groundOverlapLeft = Math.max(0, lp.x - playerLeft);
+        const groundOverlapRight = Math.max(0, playerRight - (lp.x + lp.width));
+        const groundRatio = (groundOverlapLeft + groundOverlapRight) / PLAYER_W;
+        const totalSupport = Math.min(1, maxOverlapRatio + groundRatio);
+        // Die only if less than 10% of body is supported
+        if (totalSupport < 0.1) {
+          p.die('掉入岩浆');
+        }
+      }
+    }
+
+    // Check finish
+    if (p.x >= FINISH_X) {
+      p.reachedEnd = true;
+    }
+  }
+}
+
+function isOverLava(px) {
+  for (const lp of obstacles.lavaPits) {
+    // Only count as over lava if player center is well inside the pit
+    // (generous margin so partial overlap with edges counts as safe ground)
+    if (px > lp.x + PLAYER_W/2 + 2 && px < lp.x + lp.width - PLAYER_W/2 - 2) return true;
+  }
+  return false;
+}
+
+function getPlatformAt(px) {
+  for (const mp of obstacles.movingPlatforms) {
+    // Very forgiving: any overlap between player body and platform counts
+    const playerLeft = px - PLAYER_W/2;
+    const playerRight = px + PLAYER_W/2;
+    if (playerRight >= mp.left && playerLeft <= mp.right) return mp;
+  }
+  return null;
+}
+
+// ========== Update Logic ==========
+function updateGame() {
+  if (gameState !== 'playing') return;
+  frameCount++;
+
+  // --- Player input ---
+  const a = players[0], b = players[1];
+  if (a.isAlive) {
+    a.speed = 0;
+    if (keys['a']) a.speed = -PLAYER_SPEED;
+    if (keys['d']) a.speed = PLAYER_SPEED;
+  }
+  if (b.isAlive) {
+    b.speed = 0;
+    if (keys['arrowleft']) b.speed = -PLAYER_SPEED;
+    if (keys['arrowright']) b.speed = PLAYER_SPEED;
+  }
+
+  // --- Move players ---
+  for (const p of players) {
+    if (!p.isAlive) continue;
+    p.x += p.speed;
+    // Clamp to level bounds
+    if (p.x < PLAYER_W/2) p.x = PLAYER_W/2;
+    if (p.x > LEVEL_LENGTH) p.x = LEVEL_LENGTH;
+  }
+
+  applyRopeConstraint();
+
+  // --- Update obstacles ---
+  for (const fo of obstacles.fallingObjects) fo.update();
+  for (const sp of obstacles.spikes) sp.update();
+
+  // Update platforms and carry any overlapping players
+  for (const mp of obstacles.movingPlatforms) {
+    const oldX = mp.x;
+    mp.update();
+    const dx = mp.x - oldX;
+    // Carry players who overlap this platform (check against OLD position where they were standing)
+    for (const p of players) {
+      if (!p.isAlive) continue;
+      const playerLeft = p.x - PLAYER_W/2;
+      const playerRight = p.x + PLAYER_W/2;
+      if (playerRight >= oldX && playerLeft <= oldX + mp.width) {
+        p.x += dx;
+      }
+    }
+  }
+
+  // Re-evaluate platform riding AFTER platforms have moved and carried players
+  for (const p of players) {
+    if (!p.isAlive) continue;
+    p.isOnPlatform = false;
+    p.currentPlatform = null;
+    const plat = getPlatformAt(p.x);
+    if (plat) {
+      p.isOnPlatform = true;
+      p.currentPlatform = plat;
+    }
+    p.y = GROUND_Y;
+  }
+
+  // --- Collisions ---
+  checkCollisions();
+
+  // --- Camera ---
+  const targetCam = ((a.x + b.x) / 2) - W/2;
+  cameraX += (targetCam - cameraX) * CAMERA_SMOOTH;
+  cameraX = Math.max(0, Math.min(LEVEL_LENGTH - W, cameraX));
+
+  // --- Particles ---
+  updateParticles();
+
+  // --- Win/Lose ---
+  if (!a.isAlive || !b.isAlive) {
+    const deadP = !a.isAlive ? a : b;
+    endGame('lose', deadP.deathReason);
+  }
+  if (a.reachedEnd && b.reachedEnd) {
+    endGame('win', '');
+  }
+
+  // Update HUD
+  const phase = getPhase();
+  document.getElementById('phase-display').textContent = `阶段 ${phase}/4`;
+  const pctA = Math.min(100, (a.x / FINISH_X) * 100);
+  const pctB = Math.min(100, (b.x / FINISH_X) * 100);
+  document.querySelector('.fill-a').style.width = pctA + '%';
+  document.querySelector('.fill-b').style.width = pctB + '%';
+}
+
+function getPhase() {
+  const mid = (players[0].x + players[1].x) / 2;
+  if (mid < 1500) return 1;
+  if (mid < 3000) return 2;
+  if (mid < 4500) return 3;
+  return 4;
+}
+
+// ========== Rendering ==========
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+
+  drawBackground();
+  drawGround();
+  drawLavaPits();
+  drawMovingPlatforms();
+  drawSpikes();
+  drawFallingObjects();
+  drawFinishLine();
+  drawRope();
+  drawPlayers();
+  drawParticles();
+
+  ctx.restore();
+}
+
+function drawBackground() {
+  // Parallax stars/sky
+  const gradient = ctx.createLinearGradient(0, 0, 0, H);
+  gradient.addColorStop(0, '#0f0f2e');
+  gradient.addColorStop(0.6, '#1a1a3e');
+  gradient.addColorStop(1, '#2a1a2e');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(cameraX, 0, W, H);
+
+  // Parallax dots
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  for (let i = 0; i < 60; i++) {
+    const sx = ((i * 137.5) % (W + 200)) + cameraX * 0.1;
+    const sy = (i * 73.7) % (GROUND_Y - 40);
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+
+  // Mountains (parallax)
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.beginPath();
+  ctx.moveTo(cameraX, GROUND_Y);
+  for (let x = cameraX; x < cameraX + W + 100; x += 80) {
+    const h = 60 + Math.sin((x + cameraX*0.2) * 0.005) * 40 + Math.sin((x + cameraX*0.2) * 0.013) * 25;
+    ctx.lineTo(x, GROUND_Y - h);
+  }
+  ctx.lineTo(cameraX + W, GROUND_Y);
+  ctx.fill();
+}
+
+function drawGround() {
+  // Ground
+  const startX = Math.floor(cameraX / 40) * 40;
+  for (let x = startX; x < cameraX + W + 40; x += 40) {
+    let overLava = false;
+    for (const lp of obstacles.lavaPits) {
+      if (x + 20 > lp.x && x < lp.x + lp.width) { overLava = true; break; }
+    }
+    if (!overLava) {
+      ctx.fillStyle = '#2a2a4a';
+      ctx.fillRect(x, GROUND_Y, 40, H - GROUND_Y);
+      ctx.fillStyle = '#3a3a5a';
+      ctx.fillRect(x, GROUND_Y, 40, 3);
+      // grid line
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.fillRect(x, GROUND_Y, 1, H - GROUND_Y);
+    }
+  }
+}
+
+function drawLavaPits() {
+  for (const lp of obstacles.lavaPits) {
+    // Lava glow
+    const lgrd = ctx.createRadialGradient(lp.x + lp.width/2, GROUND_Y, 10, lp.x + lp.width/2, GROUND_Y, lp.width);
+    lgrd.addColorStop(0, 'rgba(255,80,20,0.15)');
+    lgrd.addColorStop(1, 'rgba(255,80,20,0)');
+    ctx.fillStyle = lgrd;
+    ctx.fillRect(lp.x - 50, GROUND_Y - 80, lp.width + 100, 120);
+
+    // Lava surface
+    ctx.fillStyle = '#1a0a0a';
+    ctx.fillRect(lp.x, GROUND_Y, lp.width, H - GROUND_Y);
+
+    // Animated lava
+    const t = frameCount * 0.05;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = `rgba(255,${60+i*30},0,${0.3 + i*0.1})`;
+      ctx.beginPath();
+      ctx.moveTo(lp.x, GROUND_Y + 10 + i*8);
+      for (let x = lp.x; x <= lp.x + lp.width; x += 10) {
+        const wave = Math.sin(x*0.04 + t + i) * 4;
+        ctx.lineTo(x, GROUND_Y + 10 + i*8 + wave);
+      }
+      ctx.lineTo(lp.x + lp.width, H);
+      ctx.lineTo(lp.x, H);
+      ctx.fill();
+    }
+
+    // Edge markers
+    ctx.fillStyle = '#ff4444';
+    ctx.fillRect(lp.x - 3, GROUND_Y - 10, 3, 14);
+    ctx.fillRect(lp.x + lp.width, GROUND_Y - 10, 3, 14);
+  }
+}
+
+function drawMovingPlatforms() {
+  for (const mp of obstacles.movingPlatforms) {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(mp.x - 2, mp.y + 2, mp.width + 4, 10);
+    // Platform body
+    ctx.fillStyle = '#5b7a5b';
+    ctx.fillRect(mp.x, mp.y - 6, mp.width, 10);
+    ctx.fillStyle = '#7a9a7a';
+    ctx.fillRect(mp.x, mp.y - 6, mp.width, 3);
+    // Edge highlights
+    ctx.fillStyle = '#8aba8a';
+    ctx.fillRect(mp.x, mp.y - 6, 2, 10);
+    ctx.fillRect(mp.x + mp.width - 2, mp.y - 6, 2, 10);
+  }
+}
+
+function drawSpikes() {
+  for (const sp of obstacles.spikes) {
+    if (sp.height <= 0 && sp.state !== 'warning') continue;
+    const h = sp.height;
+    const cx = sp.x;
+    const hw = sp.width / 2;
+
+    // Warning glow
+    if (sp.state === 'warning') {
+      ctx.fillStyle = `rgba(255,100,50,${0.2 + Math.sin(frameCount*0.3)*0.15})`;
+      ctx.fillRect(cx - hw - 5, GROUND_Y - 5, sp.width + 10, 8);
+    }
+
+    // Spike triangles
+    if (h > 0) {
+      const numSpikes = 4;
+      const spikeW = sp.width / numSpikes;
+      for (let i = 0; i < numSpikes; i++) {
+        const sx = cx - hw + i * spikeW;
+        ctx.fillStyle = sp.state === 'active' ? '#d44' : '#a66';
+        ctx.beginPath();
+        ctx.moveTo(sx, GROUND_Y);
+        ctx.lineTo(sx + spikeW/2, GROUND_Y - h);
+        ctx.lineTo(sx + spikeW, GROUND_Y);
+        ctx.fill();
+        // Highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.beginPath();
+        ctx.moveTo(sx + spikeW*0.3, GROUND_Y);
+        ctx.lineTo(sx + spikeW/2, GROUND_Y - h);
+        ctx.lineTo(sx + spikeW*0.5, GROUND_Y);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawFallingObjects() {
+  for (const fo of obstacles.fallingObjects) {
+    if (fo.state === 'warning') {
+      // Ground warning circle
+      const alpha = 0.3 + Math.sin(frameCount * 0.2) * 0.2;
+      ctx.strokeStyle = `rgba(255,80,80,${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(fo.targetX, GROUND_Y, fo.width * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+      // Shadow on ground
+      ctx.fillStyle = `rgba(255,50,50,${alpha * 0.3})`;
+      ctx.beginPath();
+      ctx.ellipse(fo.targetX, GROUND_Y, fo.width * 0.7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Arrow from top
+      ctx.fillStyle = `rgba(255,80,80,${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(fo.targetX, 30);
+      ctx.lineTo(fo.targetX - 8, 15);
+      ctx.lineTo(fo.targetX + 8, 15);
+      ctx.fill();
+    }
+    if (fo.state === 'falling' || fo.state === 'landed') {
+      // Rock shape
+      ctx.fillStyle = '#666';
+      ctx.beginPath();
+      ctx.moveTo(fo.targetX - fo.width/2, fo.y);
+      ctx.lineTo(fo.targetX - fo.width/3, fo.y - fo.width*0.8);
+      ctx.lineTo(fo.targetX + fo.width/3, fo.y - fo.width*0.9);
+      ctx.lineTo(fo.targetX + fo.width/2, fo.y - fo.width*0.2);
+      ctx.fill();
+      ctx.fillStyle = '#888';
+      ctx.beginPath();
+      ctx.moveTo(fo.targetX - fo.width/3, fo.y - fo.width*0.8);
+      ctx.lineTo(fo.targetX, fo.y - fo.width*0.5);
+      ctx.lineTo(fo.targetX + fo.width/3, fo.y - fo.width*0.9);
+      ctx.fill();
+    }
+  }
+}
+
+function drawFinishLine() {
+  // Finish zone glow
+  const grd = ctx.createLinearGradient(FINISH_X - 30, 0, FINISH_X + 80, 0);
+  grd.addColorStop(0, 'rgba(74,222,128,0)');
+  grd.addColorStop(0.5, 'rgba(74,222,128,0.08)');
+  grd.addColorStop(1, 'rgba(74,222,128,0)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(FINISH_X - 30, 0, 110, GROUND_Y);
+
+  // Checkerboard pattern
+  const sz = 12;
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 2; col++) {
+      ctx.fillStyle = (row + col) % 2 === 0 ? '#4ade80' : '#1a1a3e';
+      ctx.fillRect(FINISH_X + col * sz, GROUND_Y - 72 + row * sz, sz, sz);
+    }
+  }
+  // Flag pole
+  ctx.fillStyle = '#aaa';
+  ctx.fillRect(FINISH_X + sz, GROUND_Y - 80, 2, 80);
+  // Flag
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  ctx.moveTo(FINISH_X + sz + 2, GROUND_Y - 80);
+  ctx.lineTo(FINISH_X + sz + 28, GROUND_Y - 70);
+  ctx.lineTo(FINISH_X + sz + 2, GROUND_Y - 60);
+  ctx.fill();
+  // "终点" text
+  ctx.fillStyle = 'rgba(74,222,128,0.6)';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('终点', FINISH_X + 25, GROUND_Y - 90);
+}
+
+function drawRope() {
+  if (players.length < 2) return;
+  const a = players[0], b = players[1];
+  if (!a.isAlive || !b.isAlive) return;
+  const dist = Math.abs(b.x - a.x);
+  const tension = dist / MAX_ROPE;
+  const sag = Math.max(5, 40 * (1 - tension));
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y - PLAYER_H/2 + b.y - PLAYER_H/2) / 2 + sag;
+
+  ctx.strokeStyle = tension > 0.85 ? `rgba(255,${Math.floor(150 - tension*100)},50,0.9)` : 'rgba(200,180,140,0.7)';
+  ctx.lineWidth = tension > 0.85 ? 2.5 : 2;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y - PLAYER_H/2);
+  ctx.quadraticCurveTo(midX, midY, b.x, b.y - PLAYER_H/2);
+  ctx.stroke();
+
+  // Rope tension indicator
+  if (tension > 0.85) {
+    ctx.fillStyle = `rgba(255,100,50,${(tension-0.85)*3})`;
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('!', midX, midY - 8);
+  }
+}
+
+function drawPlayers() {
+  for (const p of players) {
+    if (!p.isAlive) continue;
+    const bx = p.x, by = p.y;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(bx, by + 2, PLAYER_W/2 + 2, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = p.color;
+    const r = 4;
+    roundRect(ctx, bx - PLAYER_W/2, by - PLAYER_H, PLAYER_W, PLAYER_H, r);
+
+    // Face area (lighter)
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(bx - PLAYER_W/2 + 3, by - PLAYER_H + 5, PLAYER_W - 6, 12);
+
+    // Eyes
+    ctx.fillStyle = '#fff';
+    const eyeY = by - PLAYER_H + 10;
+    ctx.fillRect(bx - 5, eyeY, 4, 4);
+    ctx.fillRect(bx + 2, eyeY, 4, 4);
+    ctx.fillStyle = '#111';
+    const lookDir = p.speed > 0 ? 1 : (p.speed < 0 ? -1 : 0);
+    ctx.fillRect(bx - 4 + lookDir, eyeY + 1, 2, 2);
+    ctx.fillRect(bx + 3 + lookDir, eyeY + 1, 2, 2);
+
+    // Walking animation
+    if (Math.abs(p.speed) > 0.1) {
+      const legPhase = Math.sin(frameCount * 0.3) * 4;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(bx - 5, by, 4, 2 + Math.max(0, legPhase));
+      ctx.fillRect(bx + 2, by, 4, 2 + Math.max(0, -legPhase));
+    }
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.fill();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ========== Game Control ==========
+function startGame() {
+  document.getElementById('start-overlay').style.display = 'none';
+  resetGame();
+  gameState = 'playing';
+}
+
+function resetGame() {
+  players = [
+    new Player(80, '#60a5fa', 'A'),
+    new Player(120, '#f472b6', 'B')
+  ];
+  cameraX = 0;
+  particles = [];
+  frameCount = 0;
+  generateLevel();
+  document.getElementById('message-overlay').classList.remove('active');
+}
+
+function restartGame() {
+  resetGame();
+  gameState = 'playing';
+}
+
+function endGame(result, reason) {
+  gameState = result;
+  const overlay = document.getElementById('message-overlay');
+  const title = document.getElementById('msg-title');
+  const sub = document.getElementById('msg-sub');
+  overlay.classList.add('active');
+  title.className = result;
+  if (result === 'win') {
+    title.textContent = '胜利!';
+    sub.textContent = '两位玩家成功到达终点!';
+  } else {
+    title.textContent = '失败';
+    sub.textContent = reason || '有玩家未能存活';
+  }
+}
+
+// ========== Game Loop ==========
+function gameLoop() {
+  updateGame();
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
 </body>
 </html>
