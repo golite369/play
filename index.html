@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>双人绳索协作原型</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div>
+        <h1>双人绳索协作</h1>
+        <p>角色 A：A / D，角色 B：← / →</p>
+      </div>
+      <div class="hud-info">
+        <div id="phaseLabel">阶段 1 / 4</div>
+        <div id="statusLabel">进行中</div>
+      </div>
+    </section>
+
+    <section class="legend">
+      <span><i class="dot player-a"></i>角色 A</span>
+      <span><i class="dot player-b"></i>角色 B</span>
+      <span><i class="dot rope"></i>绳索范围</span>
+      <span><i class="dot drop"></i>掉落障碍</span>
+      <span><i class="dot spike"></i>钉刺</span>
+      <span><i class="dot lava"></i>岩浆</span>
+      <span><i class="dot platform"></i>浮动平台</span>
+    </section>
+
+    <section class="game-shell">
+      <canvas id="gameCanvas" width="1280" height="720"></canvas>
+      <div class="overlay hidden" id="overlay">
+        <h2 id="overlayTitle">游戏结束</h2>
+        <p id="overlayText"></p>
+        <button id="restartButton" type="button">重新开始</button>
+      </div>
+    </section>
+
+    <section class="tips">
+      <h2>玩法目标</h2>
+      <p>两名角色都需要抵达终点；任意一人被砸中、踩到激活钉刺或掉进岩浆都会失败。</p>
+      <p>绳子会限制两人的最远距离，所以不能各走各的，必须协同移动与等待。</p>
+    </section>
+  </main>
+
+  <script src="./game.js"></script>
+</body>
+</html>

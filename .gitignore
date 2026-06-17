@@ -1,0 +1,7 @@
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs
+*.log
